@@ -19,7 +19,8 @@ A lightweight, on-demand, CLI-driven local development environment for macOS. It
 1. Create the script: `nano ~/mamp-lite.sh` (paste the code, save, and exit).
 2. Make it executable: `chmod +x ~/mamp-lite.sh`
 3. Run setup: `~/mamp-lite.sh setup`
-4. Activate alias: `source ~/.zshrc`
+4. sudo ln -s ~/mamp-lite.sh /usr/local/bin/mamp
+5. Activate alias: `source ~/.zshrc`
 
 ## Command Reference
 
