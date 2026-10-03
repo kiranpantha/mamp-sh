@@ -67,3 +67,4 @@ A lightweight, on-demand, CLI-driven local development environment for macOS. It
 3. `rm -rf ~/.mamp-lite ~/mamp-lite.sh`
 4. Remove `alias mamp=...` from `~/.zshrc` or `~/.bash_profile`.
 5. Edit `/etc/hosts` and remove lines ending with `# mamp-lite`.
+# mamp-sh

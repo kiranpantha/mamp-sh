@@ -263,6 +263,23 @@ stop_services() { brew services stop nginx mysql php > /dev/null; echo -e "${GRE
 restart_services() { stop_services; sleep 2; start_services; }
 show_status() { brew services list | grep -E 'nginx|mysql|php'; }
 
+# --- phpMyAdmin Setup ---
+setup_pma() {
+    echo -e "${GREEN}[1/2] Installing phpMyAdmin via Homebrew...${NC}"
+    brew install phpmyadmin
+    
+    echo -e "${GREEN}[2/2] Linking phpMyAdmin to your web root...${NC}"
+    # $(brew --prefix) automatically detects Intel (/usr/local) or Apple Silicon (/opt/homebrew)
+    local PMA_PATH="$(brew --prefix)/share/phpmyadmin"
+    
+    # Create a symlink in your ~/Sites directory
+    ln -sfn "$PMA_PATH" "$SITES_DIR/phpmyadmin"
+    
+    echo -e "\n${GREEN}Success! phpMyAdmin is ready.${NC}"
+    echo -e "Visit: ${YELLOW}http://localhost:8080/phpmyadmin${NC}"
+    echo -e "Username: ${YELLOW}root${NC} | Password: ${YELLOW}(leave blank)${NC}"
+}
+
 # Command Router
 case "$1" in
     setup)          setup_env ;;
@@ -272,6 +289,7 @@ case "$1" in
     status)         show_status ;;
     add)            add_vhost "$2" ;;
     remove)         remove_vhost "$2" ;;
+    pma)            setup_pma ;;  # <--- ADD THIS LINE
     project:start)  project_start "$2" ;;
     project:stop)   project_stop "$2" ;;
     *)              show_help ;;
