@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==========================================
-# MAMP-LITE (Persistent & Docker-like Logs)
+# MAMP-LITE (Nginx + Laravel Full-Stack)
 # ==========================================
 
 if [[ $(uname -m) == 'arm64' ]]; then
@@ -15,7 +15,7 @@ VHOST_DIR="$BREW_PREFIX/etc/nginx/vhosts"
 SITES_DIR="$HOME/Sites"
 
 # Persistent Config Directories
-MAMP_DIR="$HOME/.mamp-lite"
+MAMP_DIR="$HOME/.mamp"
 PROJECTS_DIR="$MAMP_DIR/projects"
 PIDS_DIR="$MAMP_DIR/pids"
 
@@ -35,6 +35,12 @@ show_help() {
     echo "  status         - Check global service status"
     echo "  add [name]     - Create vhost & save project config (Interactive)"
     echo "  remove [name]  - Remove vhost, config, and stop services"
+    echo "  pma            - Install and link phpMyAdmin"
+    echo ""
+    echo "Database Commands:"
+    echo "  db:create      - Create MySQL database and user (Interactive or one-liner)"
+    echo "  db:list        - List all databases"
+    echo "  db:users       - List all MySQL users"
     echo ""
     echo "Project Commands (Run inside project dir or pass hostname):"
     echo "  project:start  - Start global services + persisted project services (Streams logs)"
@@ -257,28 +263,77 @@ remove_vhost() {
     echo -e "${GREEN}Hostname $HOSTNAME removed and project cleaned up.${NC}"
 }
 
-# --- Global Services ---
-start_services() { brew services start nginx mysql php > /dev/null; echo -e "${GREEN}Global services LIVE!${NC}"; }
-stop_services() { brew services stop nginx mysql php > /dev/null; echo -e "${GREEN}Global services disabled.${NC}"; }
-restart_services() { stop_services; sleep 2; start_services; }
-show_status() { brew services list | grep -E 'nginx|mysql|php'; }
-
 # --- phpMyAdmin Setup ---
 setup_pma() {
     echo -e "${GREEN}[1/2] Installing phpMyAdmin via Homebrew...${NC}"
     brew install phpmyadmin
     
     echo -e "${GREEN}[2/2] Linking phpMyAdmin to your web root...${NC}"
-    # $(brew --prefix) automatically detects Intel (/usr/local) or Apple Silicon (/opt/homebrew)
     local PMA_PATH="$(brew --prefix)/share/phpmyadmin"
-    
-    # Create a symlink in your ~/Sites directory
     ln -sfn "$PMA_PATH" "$SITES_DIR/phpmyadmin"
     
     echo -e "\n${GREEN}Success! phpMyAdmin is ready.${NC}"
     echo -e "Visit: ${YELLOW}http://localhost:8080/phpmyadmin${NC}"
     echo -e "Username: ${YELLOW}root${NC} | Password: ${YELLOW}(leave blank)${NC}"
 }
+
+# --- Database Management ---
+create_db() {
+    local DB_NAME=$1
+    local DB_USER=$2
+    local DB_PASS=$3
+    
+    if [ -z "$DB_NAME" ]; then
+        read -p "Database name: " DB_NAME
+        read -p "Username: " DB_USER
+        read -s -p "Password: " DB_PASS
+        echo ""
+    fi
+    
+    if [ -z "$DB_NAME" ] || [ -z "$DB_USER" ] || [ -z "$DB_PASS" ]; then
+        echo -e "${RED}Error: All fields are required.${NC}"
+        return 1
+    fi
+    
+    mysql -u root -e "CREATE DATABASE IF NOT EXISTS $DB_NAME; CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS'; GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost'; FLUSH PRIVILEGES;" 2>/dev/null
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Database '$DB_NAME' created successfully.${NC}"
+        echo -e "User: ${YELLOW}$DB_USER${NC}"
+        echo -e "Password: ${YELLOW}$DB_PASS${NC}"
+        
+        # Auto-update Laravel .env if we're in a Laravel project
+        if [ -f "$PWD/.env" ]; then
+            sed -i '' "s/DB_DATABASE=.*/DB_DATABASE=$DB_NAME/" "$PWD/.env"
+            sed -i '' "s/DB_USERNAME=.*/DB_USERNAME=$DB_USER/" "$PWD/.env"
+            sed -i '' "s/DB_PASSWORD=.*/DB_PASSWORD=$DB_PASS/" "$PWD/.env"
+            echo -e "\n${GREEN}Updated .env file automatically.${NC}"
+        fi
+        
+        echo -e "\n${YELLOW}Add this to your application .env file:${NC}"
+        echo "DB_DATABASE=$DB_NAME"
+        echo "DB_USERNAME=$DB_USER"
+        echo "DB_PASSWORD=$DB_PASS"
+    else
+        echo -e "${RED}Error creating database. Is MySQL running?${NC}"
+    fi
+}
+
+list_databases() {
+    echo -e "${GREEN}All MySQL Databases:${NC}"
+    mysql -u root -e "SHOW DATABASES;" 2>/dev/null
+}
+
+list_users() {
+    echo -e "${GREEN}All MySQL Users:${NC}"
+    mysql -u root -e "SELECT User, Host FROM mysql.user;" 2>/dev/null
+}
+
+# --- Global Services ---
+start_services() { brew services start nginx mysql php > /dev/null; echo -e "${GREEN}Global services LIVE!${NC}"; }
+stop_services() { brew services stop nginx mysql php > /dev/null; echo -e "${GREEN}Global services disabled.${NC}"; }
+restart_services() { stop_services; sleep 2; start_services; }
+show_status() { brew services list | grep -E 'nginx|mysql|php'; }
 
 # Command Router
 case "$1" in
@@ -289,7 +344,10 @@ case "$1" in
     status)         show_status ;;
     add)            add_vhost "$2" ;;
     remove)         remove_vhost "$2" ;;
-    pma)            setup_pma ;;  # <--- ADD THIS LINE
+    pma)            setup_pma ;;
+    db:create)      create_db "$2" "$3" "$4" ;;
+    db:list)        list_databases ;;
+    db:users)       list_users ;;
     project:start)  project_start "$2" ;;
     project:stop)   project_stop "$2" ;;
     *)              show_help ;;
